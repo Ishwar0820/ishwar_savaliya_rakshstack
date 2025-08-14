@@ -12,7 +12,7 @@ class _SortByPageState extends State<SortByPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea( // ⬅️ bottom inset ko respect kare
+    return SafeArea(
       top: false,
       child: Container(
         decoration: const BoxDecoration(
@@ -50,9 +50,8 @@ class _SortByPageState extends State<SortByPage> {
             ),
             const Divider(height: 1),
 
-            // Options area
             SizedBox(
-              height: 300, // fixed list area, buttons stay below
+              height: 300,
               child: Row(
                 children: [
                   // Left side label
@@ -107,7 +106,6 @@ class _SortByPageState extends State<SortByPage> {
               ),
             ),
 
-            // Bottom buttons — wrapped in SafeArea so they never sit under nav bar
             SafeArea(
               top: false,
               child: Padding(

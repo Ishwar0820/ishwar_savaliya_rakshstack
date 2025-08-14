@@ -2,15 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'profile_setup_page.dart';
-import '../home/home_page.dart';                         // ⬅ import
+import '../home/home_page.dart';
 import '../../data/auth_repository.dart';
 import '../admin/admin_profile_setup_page.dart';
 import '../admin/admin_dashboard.dart';
 
 class OtpVerifyPage extends StatefulWidget {
-  final String role;           // 'customer' | 'admin'
-  final String phone;          // e.g. +91xxxxxxxxxx
-  final bool loginFlow;        // ⬅ NEW: true => this is Login, false => Registration
+  final String role;
+  final String phone;
+  final bool loginFlow;
   const OtpVerifyPage({
     super.key,
     required this.role,
@@ -60,7 +60,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
 
   void _onChanged(int i, String v) {
     if (v.length > 1) {
-      // Paste handling
+
       final only = v.replaceAll(RegExp(r'\D'), '');
       for (int k = 0; k < only.length && i + k < 6; k++) {
         _digits[i + k].text = only[k];
@@ -110,13 +110,11 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
     } else {
       // Customer:
       if (widget.loginFlow) {
-        // Login → directly home
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const HomePage()),
         );
       } else {
-        // Registration → go to profile setup (phone prefilled)
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

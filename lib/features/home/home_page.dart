@@ -4,7 +4,7 @@ import '../profile/profile_view_page.dart';
 import '../sort_filter/sort_by_page.dart';
 import '../sort_filter/filter_page.dart';
 import '../pg/pg_detail_page.dart';
-import '../pg/pg_models.dart';      // <-- NEW
+import '../pg/pg_models.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,7 +20,6 @@ class _HomePageState extends State<HomePage> {
   ];
   String _city = 'Ahmedabad';
 
-  // Dummy PG data - images provided for demo...
   final List<_Pg> _all = [
     _Pg(
       'Sonoma House',
@@ -869,7 +868,6 @@ class _Pg {
   final List<String> amenities;
   final List<String> images;
 
-  // images optional, defaults to []
   _Pg(this.name, this.area, this.city, this.price, this.amenities,
       {List<String>? images})
       : images = images ?? const [];

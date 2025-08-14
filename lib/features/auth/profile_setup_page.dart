@@ -5,8 +5,8 @@ import '../home/home_page.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   final String role;
-  final String phone;             // OTP flow se aaya phone, '' if email flow
-  final String? initialEmail;     // email flow me prefill
+  final String phone;
+  final String? initialEmail;
 
   const ProfileSetupPage({
     super.key,
@@ -38,12 +38,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   void initState() {
     super.initState();
 
-    // ---- Phone prefill: keep only last 10 digits (strip +91 etc.) ----
     final digits = widget.phone.replaceAll(RegExp(r'[^0-9]'), '');
     final last10 = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
     _phoneCtrl.text = last10;
 
-    // ---- Email prefill (from email flow) ----
     _emailCtrl.text = widget.initialEmail?.trim() ?? '';
   }
 
@@ -119,7 +117,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
-  // Compact gender option (prevents wrapping on small screens)
   Widget _genderOption(String value) {
     final selected = _gender == value;
     return InkWell(
@@ -229,7 +226,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Name
                         _requiredLabel('Full Name'),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -252,7 +248,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Mobile Number (readOnly if prefilled)
                         _requiredLabel('Mobile Number'),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -284,7 +279,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Email (readOnly if prefilled)
                         _requiredLabel('Email'),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -312,7 +306,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Gender (compact radios -> no wrapping anywhere)
                         _requiredLabel('Gender'),
                         const SizedBox(height: 6),
                         Wrap(

@@ -16,12 +16,10 @@ class _RegisterPageState extends State<RegisterPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
-  // phone
   final _phoneCtrl = TextEditingController();
   final _phoneForm = GlobalKey<FormState>();
   bool _phoneValid = false;
 
-  // email
   final _emailForm = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
@@ -105,9 +103,7 @@ class _RegisterPageState extends State<RegisterPage>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
-                  // ✅ your app logo
-                  // (path same as your project assets)
-                  // If your path differs, change below accordingly.
+
                   Image(
                     image: AssetImage('assets/images/app logo-1.jpg'),
                     height: 72,
