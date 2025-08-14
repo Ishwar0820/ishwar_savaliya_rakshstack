@@ -1,6 +1,8 @@
 // lib/features/auth/select_role_page.dart
 import 'package:flutter/material.dart';
 import 'phone_auth_page.dart';
+import 'register_page.dart';
+
 
 class SelectRolePage extends StatelessWidget {
   const SelectRolePage({super.key});
@@ -106,7 +108,7 @@ class SelectRolePage extends StatelessWidget {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                      const PhoneAuthPage(
+                                      const RegisterPage(
                                           role: 'customer'),
                                     ),
                                   );
@@ -121,7 +123,7 @@ class SelectRolePage extends StatelessWidget {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                      const PhoneAuthPage(
+                                      const RegisterPage(
                                           role: 'admin'),
                                     ),
                                   );

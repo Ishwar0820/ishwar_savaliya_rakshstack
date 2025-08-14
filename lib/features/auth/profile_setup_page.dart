@@ -1,15 +1,18 @@
+// lib/features/auth/profile_setup_page.dart
 import 'package:flutter/material.dart';
-// ADD: correct the path if your folders differ
+import 'package:flutter/services.dart';
 import '../home/home_page.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   final String role;
-  final String phone;
+  final String phone;             // OTP flow se aaya phone, '' if email flow
+  final String? initialEmail;     // email flow me prefill
 
   const ProfileSetupPage({
     super.key,
     required this.role,
     required this.phone,
+    this.initialEmail,
   });
 
   @override
@@ -20,6 +23,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
 
   String? _gender;
   DateTime? _dob;
@@ -27,10 +31,27 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   bool _showGenderError = false;
   bool _showDobError = false;
 
+  bool get _isPhonePrefilled => _phoneCtrl.text.trim().isNotEmpty;
+  bool get _isEmailPrefilled => (widget.initialEmail ?? '').trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ---- Phone prefill: keep only last 10 digits (strip +91 etc.) ----
+    final digits = widget.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final last10 = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+    _phoneCtrl.text = last10;
+
+    // ---- Email prefill (from email flow) ----
+    _emailCtrl.text = widget.initialEmail?.trim() ?? '';
+  }
+
   @override
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -87,11 +108,39 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       text: TextSpan(
         text: text,
         style: const TextStyle(
-            fontWeight: FontWeight.w600, color: Colors.black, fontSize: 14),
+          fontWeight: FontWeight.w600,
+          color: Colors.black,
+          fontSize: 14,
+        ),
         children: const [
-          TextSpan(
-            text: ' *',
-            style: TextStyle(color: Colors.red),
+          TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
+        ],
+      ),
+    );
+  }
+
+  // Compact gender option (prevents wrapping on small screens)
+  Widget _genderOption(String value) {
+    final selected = _gender == value;
+    return InkWell(
+      onTap: () => setState(() => _gender = value),
+      borderRadius: BorderRadius.circular(20),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Radio<String>(
+            value: value,
+            groupValue: _gender,
+            onChanged: (v) => setState(() => _gender = v),
+            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          Text(
+            value,
+            softWrap: false,                // prevent line break of "Female"
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
         ],
       ),
@@ -120,19 +169,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/images/app logo-1.jpg',
-                    height: 90,
-                    fit: BoxFit.contain,
-                  ),
+                  Image.asset('assets/images/app logo-1.jpg', height: 90, fit: BoxFit.contain),
                   const SizedBox(height: 10),
                   const Text(
                     'Profile Setup',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -149,11 +190,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
-                      ),
+                      BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 8)),
                     ],
                   ),
                   child: Form(
@@ -172,12 +209,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                   radius: 42,
                                   backgroundColor: const Color(0xFFE5E7EB),
                                   backgroundImage: _pickedPhoto
-                                      ? const AssetImage(
-                                      'assets/images/user-avatar-male-5.png')
+                                      ? const AssetImage('assets/images/user-avatar-male-5.png')
                                       : null,
                                   child: !_pickedPhoto
-                                      ? const Icon(Icons.person_outline,
-                                      size: 40, color: Colors.grey)
+                                      ? const Icon(Icons.person_outline, size: 40, color: Colors.grey)
                                       : null,
                                 ),
                                 Container(
@@ -186,8 +221,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   padding: const EdgeInsets.all(6),
-                                  child: const Icon(Icons.edit,
-                                      color: Colors.white, size: 16),
+                                  child: const Icon(Icons.edit, color: Colors.white, size: 16),
                                 ),
                               ],
                             ),
@@ -205,10 +239,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                             filled: true,
                             fillColor: Color(0xFFF9FAFB),
                             border: OutlineInputBorder(
-                              borderRadius:
-                              BorderRadius.all(Radius.circular(12)),
-                              borderSide:
-                              BorderSide(color: Color(0xFFE5E7EB)),
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                             ),
                           ),
                           validator: (v) {
@@ -220,27 +252,59 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Email
+                        // Mobile Number (readOnly if prefilled)
+                        _requiredLabel('Mobile Number'),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          readOnly: _isPhonePrefilled,
+                          maxLength: 10,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
+                          decoration: InputDecoration(
+                            hintText: '10-digit mobile number',
+                            counterText: '',
+                            filled: true,
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
+                            ),
+                            suffixIcon:
+                            _isPhonePrefilled ? const Icon(Icons.lock_outline, size: 18) : null,
+                          ),
+                          validator: (v) {
+                            final d = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                            if (d.length != 10) return 'Enter a valid 10-digit number';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Email (readOnly if prefilled)
                         _requiredLabel('Email'),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _emailCtrl,
                           keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(
+                          readOnly: _isEmailPrefilled,
+                          decoration: InputDecoration(
                             hintText: 'you@example.com',
                             filled: true,
-                            fillColor: Color(0xFFF9FAFB),
-                            border: OutlineInputBorder(
-                              borderRadius:
-                              BorderRadius.all(Radius.circular(12)),
-                              borderSide:
-                              BorderSide(color: Color(0xFFE5E7EB)),
+                            fillColor: const Color(0xFFF9FAFB),
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(12)),
+                              borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                             ),
+                            suffixIcon:
+                            _isEmailPrefilled ? const Icon(Icons.lock_outline, size: 18) : null,
                           ),
                           validator: (v) {
                             final email = (v ?? '').trim();
-                            if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                                .hasMatch(email)) {
+                            if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
                               return 'Enter a valid email';
                             }
                             return null;
@@ -248,39 +312,22 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Gender
+                        // Gender (compact radios -> no wrapping anywhere)
                         _requiredLabel('Gender'),
                         const SizedBox(height: 6),
-                        Row(
+                        Wrap(
+                          spacing: 24,
+                          runSpacing: 4,
                           children: [
-                            Expanded(
-                              child: RadioListTile<String>(
-                                value: 'Male',
-                                groupValue: _gender,
-                                dense: true,
-                                title: const Text('Male'),
-                                onChanged: (v) =>
-                                    setState(() => _gender = v),
-                              ),
-                            ),
-                            Expanded(
-                              child: RadioListTile<String>(
-                                value: 'Female',
-                                groupValue: _gender,
-                                dense: true,
-                                title: const Text('Female'),
-                                onChanged: (v) =>
-                                    setState(() => _gender = v),
-                              ),
-                            ),
+                            _genderOption('Male'),
+                            _genderOption('Female'),
                           ],
                         ),
                         if (_showGenderError)
                           const Padding(
                             padding: EdgeInsets.only(left: 4, bottom: 4),
                             child: Text('Please select gender',
-                                style: TextStyle(
-                                    color: Colors.red, fontSize: 12)),
+                                style: TextStyle(color: Colors.red, fontSize: 12)),
                           ),
 
                         // DOB
@@ -294,13 +341,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                               filled: true,
                               fillColor: Color(0xFFF9FAFB),
                               border: OutlineInputBorder(
-                                borderRadius:
-                                BorderRadius.all(Radius.circular(12)),
+                                borderRadius: BorderRadius.all(Radius.circular(12)),
                               ),
                             ),
                             child: Row(
-                              mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
                                   _dob == null
@@ -309,9 +354,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                       '${_dob!.month.toString().padLeft(2, '0')}-'
                                       '${_dob!.year}',
                                   style: TextStyle(
-                                    color: _dob == null
-                                        ? Colors.black54
-                                        : Colors.black87,
+                                    color: _dob == null ? Colors.black54 : Colors.black87,
                                   ),
                                 ),
                                 const Icon(Icons.calendar_month_rounded),
@@ -323,24 +366,22 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           const Padding(
                             padding: EdgeInsets.only(left: 4, top: 4),
                             child: Text('Please select your birth date',
-                                style: TextStyle(
-                                    color: Colors.red, fontSize: 12)),
+                                style: TextStyle(color: Colors.red, fontSize: 12)),
                           ),
 
                         const SizedBox(height: 12),
 
                         // Role
-                        const Text('Role',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text('Role', style: TextStyle(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
                         Chip(
                           backgroundColor: const Color(0xFFE6F0FF),
                           label: Text(
-                            widget.role[0].toUpperCase() +
-                                widget.role.substring(1),
+                            widget.role[0].toUpperCase() + widget.role.substring(1),
                             style: const TextStyle(
-                                color: Color(0xFF1F4BFF),
-                                fontWeight: FontWeight.w600),
+                              color: Color(0xFF1F4BFF),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
 
@@ -351,8 +392,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                           width: double.infinity,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(24),
                               ),
@@ -362,18 +402,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                             onPressed: _save,
                             child: const Text(
                               'Save & Continue',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 16),
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                             ),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'You can change this later in your profile.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.black45),
-                        ),
                       ],
                     ),
                   ),

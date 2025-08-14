@@ -1,15 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'profile_setup_page.dart';
 
+import 'profile_setup_page.dart';
+import '../home/home_page.dart';                         // ⬅ import
 import '../../data/auth_repository.dart';
 import '../admin/admin_profile_setup_page.dart';
 import '../admin/admin_dashboard.dart';
 
 class OtpVerifyPage extends StatefulWidget {
-  final String role;
-  final String phone;
-  const OtpVerifyPage({super.key, required this.role, required this.phone});
+  final String role;           // 'customer' | 'admin'
+  final String phone;          // e.g. +91xxxxxxxxxx
+  final bool loginFlow;        // ⬅ NEW: true => this is Login, false => Registration
+  const OtpVerifyPage({
+    super.key,
+    required this.role,
+    required this.phone,
+    this.loginFlow = false,
+  });
 
   @override
   State<OtpVerifyPage> createState() => _OtpVerifyPageState();
@@ -17,7 +24,7 @@ class OtpVerifyPage extends StatefulWidget {
 
 class _OtpVerifyPageState extends State<OtpVerifyPage> {
   final _digits = List.generate(6, (_) => TextEditingController());
-  final _nodes = List.generate(6, (_) => FocusNode());
+  final _nodes  = List.generate(6, (_) => FocusNode());
   Timer? _timer;
   int _left = 15;
 
@@ -46,12 +53,8 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
   @override
   void dispose() {
     _timer?.cancel();
-    for (final c in _digits) {
-      c.dispose();
-    }
-    for (final n in _nodes) {
-      n.dispose();
-    }
+    for (final c in _digits) c.dispose();
+    for (final n in _nodes) n.dispose();
     super.dispose();
   }
 
@@ -76,7 +79,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
     if (!_canVerify) return;
     final code = _digits.map((e) => e.text).join();
 
-    // TODO: verify real firebase here; Get mocked success now:
+    // TODO: integrate real Firebase verify
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('OTP verified: $code\nRole: ${widget.role}')),
     );
@@ -84,13 +87,14 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
     final repo = AuthRepository();
     await repo.setLoggedIn(role: widget.role, v: true);
 
-    // Role-wise routing
     if (!mounted) return;
+
+    // ---------- Role-wise routing ----------
     if (widget.role == 'admin') {
+      // Admin: if profile not complete → setup, else dashboard
       final done = await repo.isProfileComplete('admin');
       if (!mounted) return;
       if (!done) {
-        // Admin profile setup first time
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -104,15 +108,25 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
         );
       }
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProfileSetupPage(
-            role: widget.role,
-            phone: widget.phone,
+      // Customer:
+      if (widget.loginFlow) {
+        // Login → directly home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      } else {
+        // Registration → go to profile setup (phone prefilled)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfileSetupPage(
+              role: widget.role,
+              phone: widget.phone,
+            ),
           ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -151,8 +165,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                   SizedBox(height: 8),
                   Text(
                     'Verification Code',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -169,10 +182,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
-                      BoxShadow(
-                          color: Color(0x14000000),
-                          blurRadius: 16,
-                          offset: Offset(0, 8)),
+                      BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 8)),
                     ],
                   ),
                   child: Column(
@@ -196,8 +206,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                               textAlign: TextAlign.center,
                               keyboardType: TextInputType.number,
                               maxLength: 1,
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w600),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                               decoration: const InputDecoration(
                                 counterText: '',
                                 filled: true,
@@ -208,8 +217,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.all(Radius.circular(12)),
-                                  borderSide: BorderSide(
-                                      color: Color(0xFF5B7CFF), width: 1.4),
+                                  borderSide: BorderSide(color: Color(0xFF5B7CFF), width: 1.4),
                                 ),
                               ),
                               onChanged: (v) => _onChanged(i, v),
@@ -224,9 +232,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                       Column(
                         children: [
                           Text(
-                            _left > 0
-                                ? '00:${_left.toString().padLeft(2, '0')}'
-                                : 'You can resend now',
+                            _left > 0 ? '00:${_left.toString().padLeft(2, '0')}' : 'You can resend now',
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 6),
@@ -235,9 +241,7 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                             child: Text(
                               'Resend',
                               style: TextStyle(
-                                color: _left == 0
-                                    ? const Color(0xFF5B7CFF)
-                                    : Colors.grey,
+                                color: _left == 0 ? const Color(0xFF5B7CFF) : Colors.grey,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -253,18 +257,12 @@ class _OtpVerifyPageState extends State<OtpVerifyPage> {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24)),
-                            backgroundColor: _canVerify
-                                ? const Color(0xFF5B7CFF)
-                                : const Color(0xFF9CA3AF),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                            backgroundColor: _canVerify ? const Color(0xFF5B7CFF) : const Color(0xFF9CA3AF),
                             foregroundColor: Colors.white,
                           ),
                           onPressed: _canVerify ? _verify : null,
-                          child: const Text(
-                            'Submit',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
+                          child: const Text('Submit', style: TextStyle(fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ],
