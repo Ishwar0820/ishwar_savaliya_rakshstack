@@ -1,10 +1,11 @@
+// lib/features/pg/schedule_visit_page.dart
 import 'package:flutter/material.dart';
-import 'pg_models.dart';
+import '../admin/admin_models.dart';
 import 'pg_detail_page.dart';
 
 class ScheduleVisitPage extends StatefulWidget {
-  final PgDetailData data;
-  const ScheduleVisitPage({super.key, required this.data});
+  final AdminPg pg;
+  const ScheduleVisitPage({super.key, required this.pg});
 
   @override
   State<ScheduleVisitPage> createState() => _ScheduleVisitPageState();
@@ -64,8 +65,15 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
     if (picked != null) setState(() => _date = picked);
   }
 
+  Widget _thumb(String src) {
+    final isNet = src.startsWith('http');
+    return isNet
+        ? Image.network(src, fit: BoxFit.cover)
+        : Image.asset(src, fit: BoxFit.cover);
+  }
+
   void _showSuccessSheet() {
-    final d = widget.data;
+    final d = widget.pg;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -120,7 +128,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                         width: 140,
                         height: 110,
                         child: (d.images.isNotEmpty)
-                            ? Image.asset(d.images.first, fit: BoxFit.cover)
+                            ? _thumb(d.images.first)
                             : Container(color: const Color(0xFFEFEFEF)),
                       ),
                     ),
@@ -143,7 +151,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              d.address,
+                              d.address.isNotEmpty ? d.address : '${d.area}, ${d.city}',
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(color: Colors.black54),
@@ -151,8 +159,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Text('Scheduled on  ',
-                                    style: TextStyle(color: Colors.black54)),
+                                const Text('Scheduled on  ', style: TextStyle(color: Colors.black54)),
                                 Text(
                                   _date != null ? _fmtDate(_date!) : '-',
                                   style: const TextStyle(fontWeight: FontWeight.w600),
@@ -161,8 +168,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                             ),
                             Row(
                               children: [
-                                const Text('Slot Time       ',
-                                    style: TextStyle(color: Colors.black54)),
+                                const Text('Slot Time       ', style: TextStyle(color: Colors.black54)),
                                 Text(
                                   _slot ?? '-',
                                   style: const TextStyle(fontWeight: FontWeight.w600),
@@ -181,19 +187,18 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-
                   onPressed: () {
                     Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => PgDetailPage(data: widget.data),
+                        builder: (_) => PgDetailPage(pg: widget.pg),
                       ),
                     );
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: const Color(0xFF537FF4), // Blue color
+                    backgroundColor: const Color(0xFF537FF4),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -212,7 +217,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
     const lightBlue = Color(0xFFEAF2FF);
     const primaryBlue = Color(0xFF537FF4);
 
-    final d = widget.data;
+    final d = widget.pg;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Schedule Visit')),
@@ -222,6 +227,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // PG summary card
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -239,7 +245,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                         width: 150,
                         height: 110,
                         child: (d.images.isNotEmpty)
-                            ? Image.asset(d.images.first, fit: BoxFit.cover)
+                            ? _thumb(d.images.first)
                             : Container(color: const Color(0xFFEFEFEF)),
                       ),
                     ),
@@ -265,14 +271,13 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                               ),
                               child: Text(
                                 d.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 16),
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Expanded(
                               child: Text(
-                                d.address,
+                                d.address.isNotEmpty ? d.address : '${d.area}, ${d.city}',
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(color: Colors.black54),
@@ -288,8 +293,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
 
               const SizedBox(height: 16),
 
-              const Text('Name *',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Text('Name *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 6),
               TextField(
                 controller: _nameCtrl,
@@ -299,8 +303,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
 
               const SizedBox(height: 16),
 
-              const Text('Select Date *',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Text('Select Date *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 6),
               InkWell(
                 onTap: _pickDate,
@@ -325,14 +328,11 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
 
               const SizedBox(height: 16),
 
-              const Text('Select Time *',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const Text('Select Time *', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: _slot,
-                items: _slots
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
+                items: _slots.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) => setState(() => _slot = v),
                 decoration: _fieldDecoration('Select'),
               ),
@@ -373,9 +373,7 @@ class _ScheduleVisitPageState extends State<ScheduleVisitPage> {
                     disabledBackgroundColor: const Color(0xFFBFD0FF),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Schedule Visit'),
                 ),

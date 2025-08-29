@@ -54,7 +54,7 @@ class SelectRolePage extends StatelessWidget {
                             maxWidth: maxW * 0.7,
                           ),
                           child: Image.asset(
-                            'assets/images/user-avatar-male-5.png',
+                            'Project_photos/user-avatar-male-5.png',
                             fit: BoxFit.contain,
                           ),
                         ),

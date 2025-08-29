@@ -1,18 +1,24 @@
 // lib/features/auth/profile_setup_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../home/home_page.dart';
+import '../admin/admin_dashboard.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   final String role;
   final String phone;
   final String? initialEmail;
+  final String? docId;
 
   const ProfileSetupPage({
     super.key,
     required this.role,
     required this.phone,
     this.initialEmail,
+    this.docId,
   });
 
   @override
@@ -25,23 +31,24 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
-  String? _gender;
+  String? _gender;   // 'Male' | 'Female'
   DateTime? _dob;
-  bool _pickedPhoto = false;
   bool _showGenderError = false;
   bool _showDobError = false;
+  bool _saving = false;
 
-  bool get _isPhonePrefilled => _phoneCtrl.text.trim().isNotEmpty;
+  bool get _isPhonePrefilled => widget.phone.trim().isNotEmpty;
   bool get _isEmailPrefilled => (widget.initialEmail ?? '').trim().isNotEmpty;
+
+  String _normalizeTen(String anyPhone) {
+    final digits = anyPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+  }
 
   @override
   void initState() {
     super.initState();
-
-    final digits = widget.phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final last10 = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
-    _phoneCtrl.text = last10;
-
+    _phoneCtrl.text = _normalizeTen(widget.phone);
     _emailCtrl.text = widget.initialEmail?.trim() ?? '';
   }
 
@@ -55,7 +62,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    final lastDate = DateTime(now.year - 13, now.month, now.day);
+    final lastDate  = DateTime(now.year - 13, now.month, now.day);
     final firstDate = DateTime(1950, 1, 1);
 
     final picked = await showDatePicker(
@@ -73,31 +80,92 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     }
   }
 
-  void _pickPhoto() {
-    setState(() => _pickedPhoto = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile photo picker (placeholder).')),
-    );
+  Widget _buildAvatar() {
+    if (_gender == 'Male') {
+      return const CircleAvatar(
+        radius: 42,
+        backgroundImage: AssetImage('Project_photos/user-avatar-male-5.png'),
+        backgroundColor: Colors.transparent,
+      );
+    } else if (_gender == 'Female') {
+      return const CircleAvatar(
+        radius: 42,
+        backgroundImage: AssetImage('Project_photos/user-avatar-female-6.png'),
+        backgroundColor: Colors.transparent,
+      );
+    } else {
+      return const CircleAvatar(
+        radius: 42,
+        backgroundColor: Color(0xFFE5E7EB),
+        child: Icon(Icons.person_outline, size: 42, color: Colors.grey),
+      );
+    }
   }
 
-  void _save() {
+  Future<void> _save() async {
     final validForm = _formKey.currentState?.validate() ?? false;
-    final genderOk = _gender != null;
-    final dobOk = _dob != null;
+    final genderOk  = _gender != null;
+    final dobOk     = _dob != null;
 
     setState(() {
       _showGenderError = !genderOk;
-      _showDobError = !dobOk;
+      _showDobError    = !dobOk;
     });
+    if (!(validForm && genderOk && dobOk)) return;
 
-    if (validForm && genderOk && dobOk) {
+    final tenDigits = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final authPhone = FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+    final e164 = authPhone.isNotEmpty
+        ? authPhone
+        : (tenDigits.isNotEmpty ? '+91$tenDigits' : '');
+
+    final email = _emailCtrl.text.trim();
+
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final data = <String, dynamic>{
+      'name':   _nameCtrl.text.trim(),
+      'phone':  e164.isEmpty ? null : e164,
+      'phoneTen': tenDigits.isEmpty ? null : tenDigits,
+      'email':  email.isEmpty ? null : email,
+      'gender': _gender,
+      'dob':    Timestamp.fromDate(DateTime(_dob!.year, _dob!.month, _dob!.day)),
+      'role':   widget.role,
+      'avatar': (_gender ?? '').toLowerCase(),
+      'profileCompleted': true,
+      'authMode': 'FIREBASE_AUTH',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set(data, SetOptions(merge: true));
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile saved! (UI only)')),
+        const SnackBar(content: Text('Profile saved!')),
       );
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
+      if (widget.role == 'admin') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AdminDashboard()),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save profile: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -105,41 +173,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     return RichText(
       text: TextSpan(
         text: text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          color: Colors.black,
-          fontSize: 14,
-        ),
-        children: const [
-          TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
-        ],
-      ),
-    );
-  }
-
-  Widget _genderOption(String value) {
-    final selected = _gender == value;
-    return InkWell(
-      onTap: () => setState(() => _gender = value),
-      borderRadius: BorderRadius.circular(20),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Radio<String>(
-            value: value,
-            groupValue: _gender,
-            onChanged: (v) => setState(() => _gender = v),
-            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          Text(
-            value,
-            softWrap: false,                // prevent line break of "Female"
-            style: TextStyle(
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            ),
-          ),
-        ],
+        style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black, fontSize: 14),
+        children: const [TextSpan(text: ' *', style: TextStyle(color: Colors.red))],
       ),
     );
   }
@@ -195,35 +230,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Photo
-                        Center(
-                          child: GestureDetector(
-                            onTap: _pickPhoto,
-                            child: Stack(
-                              alignment: Alignment.bottomRight,
-                              children: [
-                                CircleAvatar(
-                                  radius: 42,
-                                  backgroundColor: const Color(0xFFE5E7EB),
-                                  backgroundImage: _pickedPhoto
-                                      ? const AssetImage('assets/images/user-avatar-male-5.png')
-                                      : null,
-                                  child: !_pickedPhoto
-                                      ? const Icon(Icons.person_outline, size: 40, color: Colors.grey)
-                                      : null,
-                                ),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF5B7CFF),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  padding: const EdgeInsets.all(6),
-                                  child: const Icon(Icons.edit, color: Colors.white, size: 16),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        Center(child: _buildAvatar()),
                         const SizedBox(height: 16),
 
                         _requiredLabel('Full Name'),
@@ -268,8 +275,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                               borderRadius: BorderRadius.all(Radius.circular(12)),
                               borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                             ),
-                            suffixIcon:
-                            _isPhonePrefilled ? const Icon(Icons.lock_outline, size: 18) : null,
+                            suffixIcon: _isPhonePrefilled
+                                ? const Icon(Icons.lock_outline, size: 18)
+                                : null,
                           ),
                           validator: (v) {
                             final d = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
@@ -293,8 +301,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                               borderRadius: BorderRadius.all(Radius.circular(12)),
                               borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                             ),
-                            suffixIcon:
-                            _isEmailPrefilled ? const Icon(Icons.lock_outline, size: 18) : null,
+                            suffixIcon: _isEmailPrefilled
+                                ? const Icon(Icons.lock_outline, size: 18)
+                                : null,
                           ),
                           validator: (v) {
                             final email = (v ?? '').trim();
@@ -308,12 +317,26 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
                         _requiredLabel('Gender'),
                         const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 24,
-                          runSpacing: 4,
+                        Row(
                           children: [
-                            _genderOption('Male'),
-                            _genderOption('Female'),
+                            Expanded(
+                              child: RadioListTile<String>(
+                                value: 'Male',
+                                groupValue: _gender,
+                                dense: true,
+                                title: const Text('Male'),
+                                onChanged: (v) => setState(() => _gender = v),
+                              ),
+                            ),
+                            Expanded(
+                              child: RadioListTile<String>(
+                                value: 'Female',
+                                groupValue: _gender,
+                                dense: true,
+                                title: const Text('Female'),
+                                onChanged: (v) => setState(() => _gender = v),
+                              ),
+                            ),
                           ],
                         ),
                         if (_showGenderError)
@@ -323,7 +346,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                 style: TextStyle(color: Colors.red, fontSize: 12)),
                           ),
 
-                        // DOB
                         const SizedBox(height: 4),
                         _requiredLabel('Date of Birth'),
                         const SizedBox(height: 6),
@@ -364,7 +386,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
                         const SizedBox(height: 12),
 
-                        // Role
                         const Text('Role', style: TextStyle(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 6),
                         Chip(
@@ -380,26 +401,33 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
                         const SizedBox(height: 16),
 
-                        // Save button
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                               backgroundColor: const Color(0xFF5B7CFF),
                               foregroundColor: Colors.white,
                             ),
-                            onPressed: _save,
-                            child: const Text(
+                            onPressed: _saving ? null : _save,
+                            child: _saving
+                                ? const SizedBox(
+                              height: 18, width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                                : const Text(
                               'Save & Continue',
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                             ),
                           ),
                         ),
                         const SizedBox(height: 8),
+                        const Text(
+                          'You can change this later in your profile.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: Colors.black45),
+                        ),
                       ],
                     ),
                   ),

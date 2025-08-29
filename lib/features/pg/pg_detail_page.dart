@@ -1,11 +1,13 @@
+// lib/features/pg/pg_detail_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'pg_models.dart';
+import 'package:flutter/services.dart';
+import '../admin/admin_models.dart';
 import 'schedule_visit_page.dart';
 
 class PgDetailPage extends StatefulWidget {
-  final PgDetailData data;
-  const PgDetailPage({super.key, required this.data});
+  final AdminPg pg;
+  const PgDetailPage({super.key, required this.pg});
 
   @override
   State<PgDetailPage> createState() => _PgDetailPageState();
@@ -24,10 +26,10 @@ class _PgDetailPageState extends State<PgDetailPage> {
 
   void _startAuto() {
     _autoTimer?.cancel();
-    if (widget.data.images.length <= 1) return;
+    if (widget.pg.images.length <= 1) return;
     _autoTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted) return;
-      final next = (_imgIndex + 1) % widget.data.images.length;
+      final next = (_imgIndex + 1) % widget.pg.images.length;
       _pageCtrl.animateToPage(
         next,
         duration: const Duration(milliseconds: 350),
@@ -44,19 +46,31 @@ class _PgDetailPageState extends State<PgDetailPage> {
   }
 
   void _share() {
-    // TODO: integrate share_plus later
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Share coming soon')),
     );
   }
 
+  void _copy(String text, String label) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label copied')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final d = widget.data;
-    final cs = Theme.of(context).colorScheme;
+    final d = widget.pg;
 
     const kBlue = Color(0xFF007AFF);
     const kTagBg = Color(0xFFEAF6EF);
+
+    final priceChips = <String>[
+      'x2  ₹${d.price2x}',
+      'x3  ₹${d.price3x}',
+      'x4  ₹${d.price4x}',
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -68,7 +82,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            // Images carousel
+            // Images
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -91,35 +105,12 @@ class _PgDetailPageState extends State<PgDetailPage> {
                           },
                         ),
                       ),
-                      // Gender tag
                       Positioned(
                         top: 10,
                         right: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: kTagBg,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.person_outline, size: 18, color: kBlue),
-                              SizedBox(width: 6),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: kTagBg,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: kTagBg, borderRadius: BorderRadius.circular(20)),
                           child: Row(
                             children: const [
                               Icon(Icons.person_outline, size: 18, color: kBlue),
@@ -128,7 +119,6 @@ class _PgDetailPageState extends State<PgDetailPage> {
                           ),
                         ),
                       ),
-
                       // dots
                       Positioned(
                         bottom: 10,
@@ -144,9 +134,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
                               width: active ? 18 : 8,
                               height: 8,
                               decoration: BoxDecoration(
-                                color: active
-                                    ? Colors.white
-                                    : Colors.white.withOpacity(0.6),
+                                color: active ? Colors.white : Colors.white.withOpacity(0.6),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             );
@@ -159,7 +147,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
               ),
             ),
 
-            // Name + Directions row
+            // Name + Directions
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -170,31 +158,25 @@ class _PgDetailPageState extends State<PgDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(d.name,
-                              style: const TextStyle(
-                                  fontSize: 22, fontWeight: FontWeight.w800)),
+                          Text(d.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 4),
-                          Text(d.area,
-                              style: const TextStyle(color: Colors.black54)),
+                          Text(d.area, style: const TextStyle(color: Colors.black54)),
                         ],
                       ),
                     ),
                     TextButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Open maps coming soon')),
+                          const SnackBar(content: Text('Open maps coming soon')),
                         );
                       },
-                      icon: const Icon(Icons.near_me_outlined, size: 18, color:Colors.white),
+                      icon: const Icon(Icons.near_me_outlined, size: 18, color: Colors.white),
                       label: const Text('Directions', style: TextStyle(color: Colors.white)),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
                         backgroundColor: const Color(0xFF537FF4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
                   ],
@@ -206,7 +188,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text(d.address),
+                child: Text(d.address.isNotEmpty ? d.address : '${d.area}, ${d.city}'),
               ),
             ),
 
@@ -218,9 +200,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: d.priceChips
-                      .map((raw) => _PriceBadge(rawText: raw))
-                      .toList(),
+                  children: priceChips.map((raw) => _PriceBadge(rawText: raw)).toList(),
                 ),
               ),
             ),
@@ -233,12 +213,7 @@ class _PgDetailPageState extends State<PgDetailPage> {
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: d.amenities
-                      .map((t) => _IconChip(
-                    text: t,
-                    icon: _iconForAmenity(t),
-                  ))
-                      .toList(),
+                  children: d.amenities.map((t) => _IconChip(text: t, icon: _iconForAmenity(t))).toList(),
                 ),
               ),
             ),
@@ -251,23 +226,17 @@ class _PgDetailPageState extends State<PgDetailPage> {
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: d.services
-                      .map((t) => _IconChip(
-                    text: t,
-                    icon: _iconForService(t),
-                  ))
-                      .toList(),
+                  children: d.services.map((t) => _IconChip(text: t, icon: _iconForService(t))).toList(),
                 ),
               ),
             ),
 
-            // Electricity info banner
+            // Electricity note
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                   decoration: BoxDecoration(
                     color: const Color(0xFFD1E9FF),
                     borderRadius: BorderRadius.circular(14),
@@ -290,13 +259,63 @@ class _PgDetailPageState extends State<PgDetailPage> {
               ),
             ),
 
-            // spacer for bottom bar
+            _SectionTitle('Owner & Contact'),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7FAFF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE3ECFF)),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.person_outline),
+                        title: const Text('PG Owner'),
+                        subtitle: Text(
+                          (d.ownerName.isNotEmpty ? d.ownerName : '—'),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: (d.ownerName.isEmpty)
+                            ? null
+                            : IconButton(
+                          icon: const Icon(Icons.copy),
+                          onPressed: () => _copy(d.ownerName, 'Owner name'),
+                        ),
+                      ),
+                      const Divider(height: 12),
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.call_outlined),
+                        title: const Text('Contact Number'),
+                        subtitle: Text(
+                          (d.ownerPhone.isNotEmpty ? d.ownerPhone : '—'),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: (d.ownerPhone.isEmpty)
+                            ? null
+                            : IconButton(
+                          icon: const Icon(Icons.copy),
+                          onPressed: () => _copy(d.ownerPhone, 'Phone number'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
           ],
         ),
       ),
 
-      // Bottom CTA bar (ONLY Schedule Visit)
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
@@ -307,17 +326,13 @@ class _PgDetailPageState extends State<PgDetailPage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => ScheduleVisitPage(data: widget.data),
-                  ),
+                  MaterialPageRoute(builder: (_) => ScheduleVisitPage(pg: widget.pg)),
                 );
               },
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                backgroundColor: const Color(0xFF537FF4), // same blue
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                backgroundColor: const Color(0xFF537FF4),
                 foregroundColor: Colors.white,
                 textStyle: const TextStyle(fontWeight: FontWeight.w700),
               ),
@@ -326,12 +341,9 @@ class _PgDetailPageState extends State<PgDetailPage> {
           ),
         ),
       ),
-
     );
   }
 }
-
-// ===== Helpers / widgets =====
 
 class _SectionTitle extends StatelessWidget {
   final String title;
@@ -342,10 +354,7 @@ class _SectionTitle extends StatelessWidget {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-        child: Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
+        child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -372,55 +381,52 @@ class _PriceBadge extends StatelessWidget {
     const blue = Color(0xFF007AFF);
     final (beds, price) = _parse();
 
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFF),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE3ECFF)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(Icons.bed_outlined, size: 20, color: blue),
-          const SizedBox(width: 6),
-          Text(
-            beds,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-              fontSize: 14,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 150, maxWidth: 220),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7FAFF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE3ECFF)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.bed_outlined, size: 20, color: blue),
+            const SizedBox(width: 6),
+            Text(
+              beds,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87, fontSize: 14),
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Starts from',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.black54,
-                ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Starts from',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w400, color: Colors.black54),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    price,
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: Colors.black87),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ],
               ),
-              Text(
-                price,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black54,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-
 
 class _IconChip extends StatelessWidget {
   final String text;
@@ -442,14 +448,19 @@ class _IconChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: blue),
           const SizedBox(width: 8),
-          Text(text, style: const TextStyle(color: Colors.black87)),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.black87),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// icon mappers...
 IconData _iconForAmenity(String name) {
   final n = name.toLowerCase();
   if (n.contains('air')) return Icons.ac_unit_outlined;

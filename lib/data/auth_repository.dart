@@ -3,6 +3,12 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/admin_profile.dart';
 
+class UserProfile {
+  final String name;
+  final String phone;
+  const UserProfile({required this.name, required this.phone});
+}
+
 class AuthRepository {
   static const _kAdminLoggedIn = 'is_admin_logged_in';
   static const _kAdminProfileComplete = 'is_admin_profile_complete';
@@ -14,7 +20,6 @@ class AuthRepository {
     if (role == 'admin') {
       await sp.setBool(_kAdminLoggedIn, v);
     } else {
-      // customer key bana sakte ho future me
       await sp.setBool('is_customer_logged_in', v);
     }
   }
@@ -46,7 +51,7 @@ class AuthRepository {
     }
   }
 
-  // --------- admin profile ----------
+  // --------- admin profile (local, SharedPreferences) ----------
   Future<void> saveAdminProfile(AdminProfile p) async {
     final sp = await SharedPreferences.getInstance();
     final jsonStr = jsonEncode(p.toMap());
@@ -63,6 +68,15 @@ class AuthRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<UserProfile?> getCurrentProfile() async {
+    final admin = await getAdminProfile();
+    if (admin == null) return null;
+    return UserProfile(
+      name: admin.name?.trim() ?? '',
+      phone: admin.phone?.trim() ?? '',
+    );
   }
 
   // convenience: clear admin data (logout)

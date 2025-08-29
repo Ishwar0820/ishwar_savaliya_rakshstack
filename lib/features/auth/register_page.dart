@@ -4,8 +4,11 @@ import 'otp_verify_page.dart';
 import 'login_page.dart';
 import 'profile_setup_page.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../env.dart';
+
 class RegisterPage extends StatefulWidget {
-  final String role; // 'customer' | 'admin'
+  final String role;
   const RegisterPage({super.key, required this.role});
 
   @override
@@ -25,12 +28,16 @@ class _RegisterPageState extends State<RegisterPage>
   final _passCtrl = TextEditingController();
   final _cpassCtrl = TextEditingController();
 
+  // loaders
+  bool _emailLoading = false;
+  bool _phoneLoading = false;
+
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this)
       ..addListener(() {
-        if (mounted) setState(() {}); // switch → rebuild body
+        if (mounted) setState(() {});
       });
   }
 
@@ -44,41 +51,109 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
-  // -------- phone flow --------
   void _onPhoneChanged(String v) {
     final d = v.replaceAll(RegExp(r'[^0-9]'), '');
     setState(() => _phoneValid = d.length == 10);
   }
 
-  void _submitPhone() {
+  Future<void> _submitPhone() async {
     if (!(_phoneForm.currentState?.validate() ?? false)) return;
+
     final d = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final phone = '+91$d';
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OtpVerifyPage(
-          role: widget.role,
-          phone: phone,
-          loginFlow: false,
+    final e164 = '+91$d';
+
+    if (kUseFakePhoneAuth) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtpVerifyPage(
+            role: widget.role,
+            phone: e164,
+            loginFlow: false,
+            verificationId: null,
+          ),
         ),
-      ),
-    );
+      );
+      return;
+    }
+
+    setState(() => _phoneLoading = true);
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: e164,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential cred) async {
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          final msg = (e.code == 'invalid-phone-number')
+              ? 'Invalid phone number'
+              : 'Verification failed. Try again later';
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(msg)));
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpVerifyPage(
+                role: widget.role,
+                phone: e164,
+                loginFlow: false, // registration
+                verificationId: verificationId,
+                resendToken: resendToken,
+              ),
+            ),
+          );
+        },
+        codeAutoRetrievalTimeout: (_) {},
+      );
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not start verification')),
+      );
+    } finally {
+      if (mounted) setState(() => _phoneLoading = false);
+    }
   }
 
-  // -------- email flow --------
-  void _submitEmail() {
+  Future<void> _submitEmail() async {
     if (!(_emailForm.currentState?.validate() ?? false)) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProfileSetupPage(
-          role: widget.role,
-          phone: '',
-          initialEmail: _emailCtrl.text.trim(),
+
+    setState(() => _emailLoading = true);
+    try {
+      final email = _emailCtrl.text.trim();
+      final pass = _passCtrl.text.trim();
+
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: pass,
+      );
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileSetupPage(
+            role: widget.role,
+            phone: '',
+            initialEmail: email,
+          ),
         ),
-      ),
-    );
+      );
+    } on FirebaseAuthException catch (e) {
+      String msg = 'Something went wrong';
+      if (e.code == 'email-already-in-use') msg = 'This email is already registered';
+      if (e.code == 'invalid-email') msg = 'Invalid email address';
+      if (e.code == 'weak-password') msg = 'Password is too weak';
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to register right now')),
+      );
+    } finally {
+      if (mounted) setState(() => _emailLoading = false);
+    }
   }
 
   @override
@@ -89,7 +164,6 @@ class _RegisterPageState extends State<RegisterPage>
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ===== Header with logo + title =====
             Container(
               height: h * 0.32,
               width: double.infinity,
@@ -103,7 +177,6 @@ class _RegisterPageState extends State<RegisterPage>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
-
                   Image(
                     image: AssetImage('assets/images/app logo-1.jpg'),
                     height: 72,
@@ -130,7 +203,6 @@ class _RegisterPageState extends State<RegisterPage>
               ),
             ),
 
-            // ===== Card =====
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: Transform.translate(
@@ -159,7 +231,7 @@ class _RegisterPageState extends State<RegisterPage>
                         child: TabBar(
                           controller: _tabs,
                           tabs: const [Tab(text: 'Phone'), Tab(text: 'Email')],
-                          indicatorSize: TabBarIndicatorSize.tab, // full pill
+                          indicatorSize: TabBarIndicatorSize.tab,
                           indicator: BoxDecoration(
                             color: const Color(0xFF5B7CFF),
                             borderRadius: BorderRadius.circular(12),
@@ -176,8 +248,7 @@ class _RegisterPageState extends State<RegisterPage>
                         duration: const Duration(milliseconds: 220),
                         switchInCurve: Curves.easeOut,
                         switchOutCurve: Curves.easeIn,
-                        child:
-                        (_tabs.index == 0) ? _phoneTab() : _emailTab(),
+                        child: (_tabs.index == 0) ? _phoneTab() : _emailTab(),
                       ),
 
                       const SizedBox(height: 8),
@@ -209,7 +280,6 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  // ---------------- tab bodies ----------------
 
   Widget _phoneTab() {
     return Form(
@@ -233,8 +303,7 @@ class _RegisterPageState extends State<RegisterPage>
           Row(
             children: [
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3F4F6),
                   borderRadius: BorderRadius.circular(12),
@@ -261,14 +330,12 @@ class _RegisterPageState extends State<RegisterPage>
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
-                      borderSide:
-                      BorderSide(color: Color(0xFF5B7CFF), width: 1.4),
+                      borderSide: BorderSide(color: Color(0xFF5B7CFF), width: 1.4),
                     ),
                   ),
                   onChanged: _onPhoneChanged,
                   validator: (v) {
-                    final d =
-                    (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                    final d = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
                     if (d.length != 10) {
                       return 'Enter a valid 10-digit number';
                     }
@@ -282,21 +349,24 @@ class _RegisterPageState extends State<RegisterPage>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _phoneValid ? _submitPhone : null,
+              onPressed: (_phoneValid && !_phoneLoading) ? _submitPhone : null,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: _phoneValid
-                    ? const Color(0xFF5B7CFF)
-                    : const Color(0xFF9CA3AF),
+                backgroundColor:
+                _phoneValid ? const Color(0xFF5B7CFF) : const Color(0xFF9CA3AF),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
-              child: const Text(
+              child: _phoneLoading
+                  ? const SizedBox(
+                height: 18, width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+                  : const Text(
                 'Get verification code',
-                style:
-                TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
           ),
@@ -338,8 +408,7 @@ class _RegisterPageState extends State<RegisterPage>
             ),
             validator: (v) {
               final email = (v ?? '').trim();
-              if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                  .hasMatch(email)) {
+              if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
                 return 'Enter a valid email';
               }
               return null;
@@ -361,8 +430,7 @@ class _RegisterPageState extends State<RegisterPage>
             validator: (v) {
               final p = (v ?? '').trim();
               if (p.length < 8) return 'Minimum 8 characters';
-              if (!RegExp(r'[A-Za-z]').hasMatch(p) ||
-                  !RegExp(r'\d').hasMatch(p)) {
+              if (!RegExp(r'[A-Za-z]').hasMatch(p) || !RegExp(r'\d').hasMatch(p)) {
                 return 'Include letters and numbers';
               }
               return null;
@@ -392,7 +460,7 @@ class _RegisterPageState extends State<RegisterPage>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _submitEmail,
+              onPressed: _emailLoading ? null : _submitEmail,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 backgroundColor: const Color(0xFF5B7CFF),
@@ -401,10 +469,15 @@ class _RegisterPageState extends State<RegisterPage>
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
-              child: const Text(
+              child: _emailLoading
+                  ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+                  : const Text(
                 'Register',
-                style:
-                TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
           ),

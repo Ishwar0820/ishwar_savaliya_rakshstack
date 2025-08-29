@@ -61,10 +61,60 @@ class _PgRow extends StatelessWidget {
     required this.onToggleHide,
   });
 
+  String _firstImageOrEmpty(List<String> imgs) {
+    for (final raw in imgs) {
+      final s = (raw).toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  String _normalizeDrive(String url) {
+    final reg = RegExp(r'drive\.google\.com/file/d/([^/]+)/');
+    final m = reg.firstMatch(url);
+    if (m != null && m.groupCount >= 1) {
+      final id = m.group(1)!;
+      return 'https://drive.google.com/uc?export=view&id=$id';
+    }
+    return url;
+  }
+
+  Widget _imageAny(String pathOrUrl) {
+    final src = pathOrUrl.startsWith('http')
+        ? _normalizeDrive(pathOrUrl)
+        : pathOrUrl;
+
+    final isNet = src.startsWith('http');
+    if (isNet) {
+      return Image.network(
+        src,
+        fit: BoxFit.cover,
+        cacheWidth: 360,
+        errorBuilder: (c, e, s) => _noImageBox(),
+      );
+    } else {
+      return Image.asset(
+        src,
+        fit: BoxFit.cover,
+        errorBuilder: (c, e, s) => _noImageBox(),
+      );
+    }
+  }
+
+  Widget _noImageBox() {
+    return Container(
+      color: const Color(0xFFF1F5F9),
+      alignment: Alignment.center,
+      child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = pg.hidden ? Colors.orange[700] : Colors.green[700];
     final statusText = pg.hidden ? 'Hidden' : 'Active';
+
+    final thumbSrc = _firstImageOrEmpty(pg.images);
 
     return Container(
       decoration: BoxDecoration(
@@ -89,9 +139,7 @@ class _PgRow extends StatelessWidget {
               child: SizedBox(
                 width: 96,
                 height: 86,
-                child: (pg.images.isNotEmpty)
-                    ? Image.asset(pg.images.first, fit: BoxFit.cover)
-                    : Container(color: const Color(0xFFEFEFEF)),
+                child: thumbSrc.isEmpty ? _noImageBox() : _imageAny(thumbSrc),
               ),
             ),
 

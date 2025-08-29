@@ -1,5 +1,6 @@
 // lib/features/admin/admin_dashboard.dart
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'admin_models.dart';
 import 'properties_list_page.dart';
@@ -18,95 +19,10 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int _tab = 0;
 
-  // Demo data
-  final List<AdminPg> _items = [
-    AdminPg(
-      id: 'pg_1',
-      name: 'Sonoma House',
-      city: 'Ahmedabad',
-      area: 'Gota',
-      address: 'Gota Cross Road, Ahmedabad',
-      genderTag: 'Male',
-      minPrice: 15799,
-      hidden: false,
-      images: const [
-        'assets/images/pg1_1.jpg',
-        'assets/images/pg1_2.jpg',
-        'assets/images/pg1_3.jpg',
-      ],
-      amenities: const ['Wi‑Fi', 'Laundry'],
-      services: const ['Housekeeping'],
-    ),
-    AdminPg(
-      id: 'pg_2',
-      name: 'Wilmington House',
-      city: 'Ahmedabad',
-      area: 'Navrangpura',
-      address: 'CG Road, Navrangpura, Ahmedabad',
-      genderTag: 'Any',
-      minPrice: 16099,
-      hidden: false,
-      images: const [
-        'assets/images/pg1_4.jpg',
-        'assets/images/pg1_5.jpg',
-      ],
-    ),
-  ];
-
-
-  void _addNew() async {
-    final created = await Navigator.push<AdminPg>(
-      context,
-      MaterialPageRoute(builder: (_) => const AddEditPgPage()),
-    );
-    if (created != null) {
-      setState(() => _items.add(created));
-      _toast('PG created');
-    }
-  }
-
-  void _edit(AdminPg pg) async {
-    final updated = await Navigator.push<AdminPg>(
-      context,
-      MaterialPageRoute(builder: (_) => AddEditPgPage(existing: pg)),
-    );
-    if (updated != null) {
-      final i = _items.indexWhere((e) => e.id == updated.id);
-      if (i != -1) setState(() => _items[i] = updated);
-      _toast('PG updated');
-    }
-  }
-
-  void _delete(AdminPg pg) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete PG?'),
-        content: Text('This will permanently delete “${pg.name}”.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
-      ),
-    );
-    if (ok == true) {
-      setState(() => _items.removeWhere((e) => e.id == pg.id));
-      _toast('PG deleted');
-    }
-  }
-
-  void _toggleHide(AdminPg pg) {
-    final i = _items.indexWhere((e) => e.id == pg.id);
-    if (i == -1) return;
-    setState(() => _items[i] = pg.copyWith(hidden: !pg.hidden));
-    _toast(pg.hidden ? 'Unhidden' : 'Hidden');
-  }
-
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ------- Logout flow with confirm dialog-------
   Future<void> _confirmLogout() async {
     const primaryBlue = Color(0xFF537FF4);
 
@@ -142,7 +58,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               child: const Text('Cancel'),
             ),
-
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(
@@ -169,16 +84,75 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  // UI
+  Future<void> _addNew() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEditPgPage()));
+  }
+
+  Future<void> _edit(AdminPg pg) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditPgPage(existing: pg)));
+  }
+
+  Future<void> _delete(AdminPg pg) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete PG?'),
+        content: Text('This will permanently delete “${pg.name}”.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      try {
+        await FirebaseFirestore.instance.collection('pgs').doc(pg.id).delete();
+        _toast('PG deleted');
+      } catch (e) {
+        _toast('Delete failed: $e');
+      }
+    }
+  }
+
+  Future<void> _toggleHide(AdminPg pg) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('pgs')
+          .doc(pg.id)
+          .set({'hidden': !pg.hidden, 'isActive': pg.hidden}, SetOptions(merge: true));
+    } catch (e) {
+      _toast('Update failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
-      PropertiesListPage(
-        items: _items,
-        onAddNew: _addNew,
-        onEdit: _edit,
-        onDelete: _delete,
-        onToggleHide: _toggleHide,
+      StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('pgs')
+            .orderBy('name')
+            .snapshots(),
+        builder: (ctx, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
+          }
+          final items = snap.data?.docs
+              .map((d) => AdminPg.fromDoc(d))
+              .toList() ??
+              const <AdminPg>[];
+
+          return PropertiesListPage(
+            items: items,
+            onAddNew: _addNew,
+            onEdit: _edit,
+            onDelete: _delete,
+            onToggleHide: _toggleHide,
+          );
+        },
       ),
       const _SettingsTab(),
     ];

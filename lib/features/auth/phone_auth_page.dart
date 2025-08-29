@@ -1,5 +1,6 @@
 // lib/features/auth/phone_auth_page.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'otp_verify_page.dart';
 
 class PhoneAuthPage extends StatefulWidget {
@@ -14,6 +15,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
   final _phoneCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _valid = false;
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -26,17 +28,76 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
     setState(() => _valid = digits.length == 10);
   }
 
-  void _goNext() {
-    final phone = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (phone.length != 10) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => OtpVerifyPage(
-          role: widget.role,
-          phone: '+91$phone',
-        ),
-      ),
-    );
+  Future<void> _sendOtp() async {
+    final digits = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length != 10) return;
+    final phoneE164 = '+91$digits';
+
+    setState(() => _sending = true);
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneE164,
+
+        verificationCompleted: (PhoneAuthCredential credential) async {
+        },
+
+        verificationFailed: (FirebaseAuthException e) {
+          debugPrint('PHONE-AUTH ERROR: code=${e.code}, message=${e.message}');
+
+          String msg;
+          switch (e.code) {
+            case 'invalid-phone-number':
+              msg = 'Please enter a valid 10-digit phone number.';
+              break;
+            case 'quota-exceeded':
+              msg = 'Daily SMS quota reached. Try again later.';
+              break;
+            case 'app-not-authorized':
+            case 'missing-client-identifier':
+            case 'invalid-app-credential':
+            case 'play-integrity-check-failed':
+              msg = 'App configuration issue (Play Integrity). Please try again.';
+              break;
+            case 'network-request-failed':
+              msg = 'Network issue. Check your internet and try again.';
+              break;
+            default:
+              msg = 'Verification failed. ${e.message ?? ""}'.trim();
+          }
+
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(msg)));
+
+          setState(() => _sending = false);
+        },
+
+
+
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() => _sending = false);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OtpVerifyPage(
+                role: widget.role,
+                phone: phoneE164,
+                verificationId: verificationId,
+                loginFlow: false,
+              ),
+            ),
+          );
+        },
+
+        codeAutoRetrievalTimeout: (String verificationId) {
+        },
+
+        timeout: const Duration(seconds: 60),
+      );
+    } catch (e) {
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send OTP: $e')),
+      );
+    }
   }
 
   @override
@@ -47,6 +108,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // Header
             Container(
               height: h * 0.32,
               width: double.infinity,
@@ -60,23 +122,17 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/images/app logo-1.jpg',
-                    height: 72,
-                    fit: BoxFit.contain,
-                  ),
+                  Image.asset('assets/images/app logo-1.jpg', height: 72, fit: BoxFit.contain),
                   const SizedBox(height: 8),
                   const Text(
                     'StayEasy PG',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
             ),
+
+            // Card
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: Transform.translate(
@@ -86,13 +142,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x14000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
+                    boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 16, offset: Offset(0, 8))],
                   ),
                   child: Form(
                     key: _formKey,
@@ -100,10 +150,7 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                       children: [
                         Text(
                           'Continue with Phone',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                             fontSize: 18,
                           ),
@@ -117,20 +164,13 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                           style: const TextStyle(color: Colors.black54),
                         ),
                         const SizedBox(height: 16),
+
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                '+91',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w600),
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(12)),
+                              child: const Text('+91', style: TextStyle(fontWeight: FontWeight.w600)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -144,76 +184,56 @@ class _PhoneAuthPageState extends State<PhoneAuthPage> {
                                   filled: true,
                                   fillColor: Color(0xFFF9FAFB),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(
-                                        Radius.circular(12)),
-                                    borderSide: BorderSide(
-                                        color: Color(0xFFE5E7EB)),
+                                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                                    borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(
-                                        Radius.circular(12)),
-                                    borderSide: BorderSide(
-                                        color: Color(0xFFE5E7EB)),
+                                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                                    borderSide: BorderSide(color: Color(0xFFE5E7EB)),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(
-                                        Radius.circular(12)),
-                                    borderSide: BorderSide(
-                                        color: Color(0xFF5B7CFF),
-                                        width: 1.4),
+                                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                                    borderSide: BorderSide(color: Color(0xFF5B7CFF), width: 1.4),
                                   ),
                                 ),
                                 onChanged: _onChanged,
                                 validator: (v) {
-                                  final d = (v ?? '')
-                                      .replaceAll(RegExp(r'[^0-9]'), '');
-                                  if (d.length != 10) {
-                                    return 'Enter a valid 10-digit number';
-                                  }
+                                  final d = (v ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+                                  if (d.length != 10) return 'Enter a valid 10-digit number';
                                   return null;
                                 },
                               ),
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              backgroundColor: _valid
-                                  ? const Color(0xFF5B7CFF)
-                                  : const Color(0xFF9CA3AF),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                              backgroundColor: _valid && !_sending ? const Color(0xFF5B7CFF) : const Color(0xFF9CA3AF),
                               foregroundColor: Colors.white,
                             ),
-                            onPressed: _valid
+                            onPressed: (_valid && !_sending)
                                 ? () {
-                              if (_formKey.currentState
-                                  ?.validate() ??
-                                  false) {
-                                _goNext();
+                              if (_formKey.currentState?.validate() ?? false) {
+                                _sendOtp();
                               }
                             }
                                 : null,
-                            child: const Text(
-                              'Get verification code',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16),
-                            ),
+                            child: Text(_sending ? 'Sending...' : 'Get verification code',
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
                           ),
                         ),
+
                         const SizedBox(height: 12),
                         const Text(
                           'By continuing, you agree to our Terms & Privacy Policy',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.black45),
+                          style: TextStyle(fontSize: 12, color: Colors.black45),
                         ),
                       ],
                     ),

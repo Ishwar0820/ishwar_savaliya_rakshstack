@@ -11,7 +11,7 @@ class ProfileViewPage extends StatelessWidget {
 
     final bool? ok = await showDialog<bool>(
       context: context,
-      barrierDismissible: false, // ← bahar tap se close NA ho
+      barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -31,7 +31,6 @@ class ProfileViewPage extends StatelessWidget {
             style: TextStyle(fontSize: 15),
           ),
           actions: [
-            // Cancel (white bg, blue border/text)
             OutlinedButton(
               onPressed: () => Navigator.pop(ctx, false),
               style: OutlinedButton.styleFrom(
@@ -42,7 +41,7 @@ class ProfileViewPage extends StatelessWidget {
               ),
               child: const Text('Cancel'),
             ),
-            // Logout (blue bg, white text)
+
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(
@@ -59,7 +58,6 @@ class ProfileViewPage extends StatelessWidget {
     );
 
     if (ok == true) {
-      // mark customer as logged out
       final repo = AuthRepository();
       await repo.setLoggedIn(role: 'customer', v: false);
       await repo.setProfileComplete(role: 'customer', v: false);
@@ -81,7 +79,7 @@ class ProfileViewPage extends StatelessWidget {
         children: [
           const ListTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.blue, // Blue background
+              backgroundColor: Colors.blue,
               child: Icon(Icons.person, color: Colors.white),
             ),
             title: Text('Your Profile'),
@@ -93,7 +91,6 @@ class ProfileViewPage extends StatelessWidget {
           const ListTile(leading: Icon(Icons.call), title: Text('Contact Us')),
 
           const SizedBox(height: 12),
-          // 🔴 Logout (red)
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text(

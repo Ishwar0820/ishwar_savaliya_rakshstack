@@ -5,6 +5,11 @@ import '../home/home_page.dart';
 import '../admin/admin_dashboard.dart';
 import 'register_page.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../env.dart';
+
 class LoginPage extends StatefulWidget {
   final String role;
   const LoginPage({super.key, required this.role});
@@ -26,6 +31,10 @@ class _LoginPageState extends State<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
 
+  // loaders
+  bool _loginLoading = false; // email login loader
+  bool _phoneLoading = false; // phone start loader
+
   @override
   void dispose() {
     _phoneCtrl.dispose();
@@ -34,31 +43,151 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _loginEmail() {
+  Future<void> _loginEmail() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    // TODO: Firebase check later
-    if (widget.role == 'admin') {
-      Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const AdminDashboard()));
-    } else {
-      Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const HomePage()));
+
+    setState(() => _loginLoading = true);
+    try {
+      final email = _emailCtrl.text.trim();
+      final pass = _passCtrl.text.trim();
+
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: pass,
+      );
+
+      if (!mounted) return;
+      if (widget.role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminDashboard()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String msg = 'Login failed, Please try again !';
+      if (e.code == 'user-not-found') msg = 'No user found with this email';
+      if (e.code == 'wrong-password') msg = 'Incorrect password';
+      if (e.code == 'invalid-email') msg = 'Invalid email';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to login right now')),
+      );
+    } finally {
+      if (mounted) setState(() => _loginLoading = false);
     }
   }
 
-  void _loginPhoneOtp() {
-    final d = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (d.length != 10) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OtpVerifyPage(
-          role: widget.role,
-          phone: '+91$d',
-          loginFlow: true, // login → direct home/dashboard
-        ),
-      ),
-    );
+  Future<void> _loginPhoneOtp() async {
+    final ten = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (ten.length != 10) return;
+    final e164 = '+91$ten';
+
+    setState(() => _phoneLoading = true);
+    try {
+      final users = FirebaseFirestore.instance.collection('users');
+
+      QuerySnapshot<Map<String, dynamic>> q = await users
+          .where('phoneTen', isEqualTo: ten)
+          .where('role', isEqualTo: widget.role)
+          .limit(1)
+          .get();
+
+      if (q.docs.isEmpty) {
+        q = await users
+            .where('phone', isEqualTo: e164)
+            .where('role', isEqualTo: widget.role)
+            .limit(1)
+            .get();
+      }
+
+      // 3) Fallback: old data where 'phone' stored as raw 10-digit
+      if (q.docs.isEmpty) {
+        q = await users
+            .where('phone', isEqualTo: ten)
+            .where('role', isEqualTo: widget.role)
+            .limit(1)
+            .get();
+      }
+
+      if (q.docs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No account found for this mobile number. Please sign up or check the selected role.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Extra guard (redundant but safe)
+      final data = q.docs.first.data();
+      final savedRole = (data['role'] ?? '').toString();
+      if (savedRole.isNotEmpty && savedRole != widget.role) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'This number is registered as $savedRole. Please switch role to log in.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // 4) Navigate to OTP
+      if (kUseFakePhoneAuth) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OtpVerifyPage(
+              role: widget.role,
+              phone: e164,
+              loginFlow: true,
+            ),
+          ),
+        );
+        return;
+      }
+
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: e164,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential _) {},
+        verificationFailed: (FirebaseAuthException e) {
+          final msg = (e.code == 'invalid-phone-number')
+              ? 'Invalid phone number'
+              : 'Verification failed. Try again';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OtpVerifyPage(
+                role: widget.role,
+                phone: e164,
+                loginFlow: true,
+                verificationId: verificationId,
+                resendToken: resendToken,
+              ),
+            ),
+          );
+        },
+        codeAutoRetrievalTimeout: (_) {},
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not check/start phone login: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _phoneLoading = false);
+    }
   }
 
   @override
@@ -82,8 +211,8 @@ class _LoginPageState extends State<LoginPage> {
                       validator: (v) {
                         final s = (v ?? '').trim();
                         if (s.isEmpty) return 'Email is required';
-                        final ok = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                            .hasMatch(s);
+                        final ok =
+                        RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(s);
                         return ok ? null : 'Enter a valid email';
                       },
                       decoration: const InputDecoration(
@@ -114,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _loginEmail,
+                        onPressed: _loginLoading ? null : _loginEmail,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -122,7 +251,16 @@ class _LoginPageState extends State<LoginPage> {
                           backgroundColor: const Color(0xFF5B7CFF),
                           foregroundColor: Colors.white,
                         ),
-                        child: const Text('Log In'),
+                        child: _loginLoading
+                            ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : const Text('Log In'),
                       ),
                     ),
                   ],
@@ -140,8 +278,10 @@ class _LoginPageState extends State<LoginPage> {
                           color: const Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text('+91',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        child: const Text(
+                          '+91',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -159,8 +299,8 @@ class _LoginPageState extends State<LoginPage> {
                               BorderRadius.all(Radius.circular(12)),
                             ),
                           ),
-                          // 🔧 FIX: typing par UI rebuild → button enable/disable live
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) =>
+                              setState(() {}),
                         ),
                       ),
                     ],
@@ -169,7 +309,8 @@ class _LoginPageState extends State<LoginPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _validPhone ? _loginPhoneOtp : null,
+                      onPressed:
+                      (_validPhone && !_phoneLoading) ? _loginPhoneOtp : null,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -179,7 +320,18 @@ class _LoginPageState extends State<LoginPage> {
                             : const Color(0xFF9CA3AF),
                         foregroundColor: Colors.white,
                       ),
-                      child: const Text('Get verification code'),
+                      child: _phoneLoading
+                          ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                          : Text(kUseFakePhoneAuth
+                          ? 'Continue'
+                          : 'Get verification code'),
                     ),
                   ),
                 ],
@@ -187,11 +339,9 @@ class _LoginPageState extends State<LoginPage> {
 
             const SizedBox(height: 10),
             TextButton(
-              onPressed: () =>
-                  setState(() => _emailMode = !_emailMode), // rebuilds
-              child: Text(_emailMode
-                  ? 'or continue with Phone'
-                  : 'or continue with Email'),
+              onPressed: () => setState(() => _emailMode = !_emailMode),
+              child: Text(
+                  _emailMode ? 'or continue with Phone' : 'or continue with Email'),
             ),
 
             const Spacer(),
@@ -208,9 +358,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: const Text(
                     'Sign Up',
                     style: TextStyle(
-                      color: Color(0xFF5B7CFF),
-                      fontWeight: FontWeight.w700,
-                    ),
+                        color: Color(0xFF5B7CFF), fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
